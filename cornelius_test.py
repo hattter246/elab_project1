@@ -26,6 +26,7 @@ department_mapping = {
 
 # Open the CSV file and parse each line manually
 parsed_data = []
+customer_id = 0  # Initialize customer_id
 with open("supermarket.csv", "r") as file:
     for line in file:
         transactions = line.strip().split(", ")
@@ -39,13 +40,14 @@ with open("supermarket.csv", "r") as file:
                     time_elapsed = int(time_elapsed)
                     price = float(price)
                     parsed_data.append({
+                        "customer_id": customer_id,  # Include customer_id
                         "department": department,
                         "time_elapsed": time_elapsed,
                         "price": price
                     })
                 except ValueError:
                     print("Error converting data:", parts)
-
+        customer_id += 1  # Increment customer_id for each line
 # Create a DataFrame from the parsed data
 df = pd.DataFrame(parsed_data)
 print(df.head())
