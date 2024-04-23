@@ -1,5 +1,8 @@
 import csv
 
+# Add the customer_id and handling full transactions
+file_path = '/Users/cornelius/Downloads/supermarket.csv'
+
 # Dictionary to map department codes to department names
 department_mapping = {
     '1': 'Bakery & Pastry',
@@ -22,22 +25,26 @@ department_mapping = {
     '18': 'Vegetarian & Vegan'
 }
 
-# Function to parse each row of the CSV file
-def parse_csv_row(row):
+
+def parse_csv_row(row, customer_id):
     transactions = []
     for item in row.split(','):
         dept_code, time_elapsed, price = item.strip().split()
-        transactions.append((department_mapping[dept_code], int(time_elapsed), float(price)))
+        transactions.append({
+            "customer_id": customer_id,
+            "department": department_mapping[dept_code],
+            "time_elapsed": int(time_elapsed),
+            "price": float(price)
+        })
     return transactions
 
-# Path to the CSV file
-file_path = r"C:\Users\Adam\OneDrive\Pulpit\Period 5\eLab II\supermarket\supermarket.csv"
 
-# Reading and parsing the CSV file
+all_transactions = []
+
 with open(file_path, newline='') as csvfile:
     reader = csv.reader(csvfile)
-    for row in reader:
-        transactions = parse_csv_row(row[0])
-        # print("Customer transactions:")
-        for transaction in transactions:
-            print(f"{transaction[0]}, Time: {transaction[1]} s, Price: €{transaction[2]}")
+    for customer_id, row in enumerate(reader):
+        transactions = parse_csv_row(row[0], customer_id)
+        all_transactions.extend(transactions)
+
+print(all_transactions[:5])
