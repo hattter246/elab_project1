@@ -82,3 +82,30 @@ plt.xlabel('Department')
 plt.ylabel('Frequency')
 plt.xticks(rotation=45)
 plt.show()
+
+# Grouping data by customer_id
+customer_stats = df.groupby('customer_id').agg(
+    total_spent=pd.NamedAgg(column='price', aggfunc='sum'),
+    total_items=pd.NamedAgg(column='price', aggfunc='size'),
+    avg_spent_per_visit=pd.NamedAgg(column='price', aggfunc='mean'),
+    total_time=pd.NamedAgg(column='time_elapsed', aggfunc='sum')
+).reset_index()
+
+print(customer_stats.head())
+
+# Visualizing total spending per customer
+plt.figure(figsize=(12, 6))
+sns.histplot(customer_stats['total_spent'], bins=30, kde=True)
+plt.title('Distribution of Total Spending per Customer')
+plt.xlabel('Total Spent')
+plt.ylabel('Number of Customers')
+plt.show()
+
+# Analyzing department visits per customer using a heatmap
+department_pivot = pd.pivot_table(df, values='price', index='customer_id', columns='department', aggfunc='size', fill_value=0)
+plt.figure(figsize=(12, 10))
+sns.heatmap(department_pivot, cmap='viridis', cbar_kws={'label': 'Number of Visits'})
+plt.title('Heatmap of Department Visits per Customer')
+plt.xlabel('Department')
+plt.ylabel('Customer ID')
+plt.show()
