@@ -1,7 +1,12 @@
 import pandas as pd
-from collections import defaultdict
 import matplotlib.pyplot as plt
 import seaborn as sns
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Dense
+pd.set_option('display.max_columns', None)
 
 # Define department code to department name mapping
 department_mapping = {
@@ -26,192 +31,192 @@ department_mapping = {
 }
 
 # Open the CSV file and parse each line manually
-with open("supermarket.csv", "r") as file:
-    parsed_data = []
-    na_count = 0  # Initialize NA count
+parsed_data = []
+customer_id = 0  # Initialize customer_id
+with open("supermarket_fixed2.csv", "r") as file:
     for line in file:
         transactions = line.strip().split(", ")
-        parsed_transactions = []
         for transaction in transactions:
-            transaction_data = transaction.split()
-            if len(transaction_data) == 3:
-                department_code, time_elapsed, price = transaction_data
-                # Remove the comma from the price before converting it to float
-                price = price.rstrip(',')
-                department = department_mapping.get(int(department_code))
-                if department is None:
-                    print("Invalid department code:", department_code)
-                    continue
+            parts = transaction.split()
+            if len(parts) == 3:
+                department_code, time_elapsed, price = parts
+                price = price.replace(',', '')  # Remove all commas from price string
+                department = department_mapping.get(int(department_code), "Unknown Department")
                 try:
                     time_elapsed = int(time_elapsed)
                     price = float(price)
+                    parsed_data.append({
+                        "customer_id": customer_id,  # Include customer_id
+                        "department": department,
+                        "time_elapsed": time_elapsed,
+                        "price": price
+                    })
                 except ValueError:
-                    print("Invalid time or price format:", transaction_data)
-                    continue
-                parsed_transactions.append((department, time_elapsed, price))
-            else:
-                print("Invalid transaction format:", transaction_data)
-                na_count += 1  # Increment NA count for invalid transactions
-        # Check for NAs in parsed transactions
-        if len(parsed_transactions) == 0:
-            print("No valid transactions found in line:", line.strip())
-            na_count += 1  # Increment NA count if no valid transactions found
-        else:
-            parsed_data.append(parsed_transactions)
-
+                    print("Error converting data:", parts)
+        customer_id += 1  # Increment customer_id for each line
 # Create a DataFrame from the parsed data
-df_parsed = pd.DataFrame({"parsed_transactions": parsed_data})
+df = pd.DataFrame(parsed_data)
+print(df.head())
 
-# Save the DataFrame to a CSV file
-df_parsed.to_csv("parsed_supermarket_data.csv", index=False)
-
-# Display the preprocessed dataframe
-print(df_parsed.head())
-
-# Print the total count of NAs
-print("Total count of NAs:", na_count)
-
-
-
-# Load the parsed supermarket data
-df_parsed = pd.read_csv("parsed_supermarket_data.csv")
-
-# Initialize variables for features
-total_time_spent = defaultdict(int)  # Total time spent in the store per customer
-total_items_scanned = defaultdict(int)  # Total number of items scanned per customer
-total_amount_spent = defaultdict(float)  # Total amount spent per customer
-visit_count = defaultdict(int)  # Frequency of visits per customer
-department_visits = defaultdict(lambda: defaultdict(int))  # Department visit counts per customer
-
-# Iterate through each row in the DataFrame
-for index, row in df_parsed.iterrows():
-    visits = eval(row['parsed_transactions'])  # Convert string representation to list of tuples
-    customer_id = index  # Assuming index represents customer ID
-
-    # Initialize variables for each visit
-    visit_time = 0
-    last_scan_time = 0
-    total_scans = 0
-    total_amount = 0
-
-    # Iterate through each transaction in the visit
-    for visit in visits:
-        if len(visit) != 3:
-            print("Invalid transaction format:", visit)
-            continue
-        department, time_elapsed, price = visit
-        total_scans += 1
-        total_amount += price
-
-        # Update department visit count
-        department_visits[customer_id][department] += 1
-
-        # Update total time spent in the store
-        visit_time += time_elapsed
-
-        # Calculate average time between scans
-        if last_scan_time != 0:
-            time_between_scans = time_elapsed - last_scan_time
-            total_time_spent[customer_id] += time_between_scans
-        last_scan_time = time_elapsed
-
-    # Update total items scanned and total amount spent for the customer
-    total_items_scanned[customer_id] += total_scans
-    total_amount_spent[customer_id] += total_amount
-
-    # Update visit count for the customer
-    visit_count[customer_id] += 1
-
-# Calculate average time between scans
-average_time_between_scans = {customer_id: total_time_spent[customer_id] / total_items_scanned[customer_id]
-                              for customer_id in total_items_scanned}
-
-# Create a DataFrame for additional features
-df_features = pd.DataFrame({
-    'customer_id': list(total_items_scanned.keys()),
-    'total_time_spent': list(total_time_spent.values()),
-    'total_items_scanned': list(total_items_scanned.values()),
-    'total_amount_spent': list(total_amount_spent.values()),
-    'visit_count': list(visit_count.values()),
-    'average_time_between_scans': list(average_time_between_scans.values())
-})
-
-# Display the additional features DataFrame
-print(df_features.head())
-
-# Save the additional features DataFrame to a CSV file
-df_features.to_csv("additional_features.csv", index=False)
-
-
-
-# Load the additional features DataFrame
-df_features = pd.read_csv("additional_features.csv")
-
-# Plot boxplots for each feature
-plt.figure(figsize=(16, 8))
-plt.subplot(2, 3, 1)
-sns.boxplot(y=df_features['total_time_spent'])
-plt.title('Boxplot of Total Time Spent')
-
-plt.subplot(2, 3, 2)
-sns.boxplot(y=df_features['total_items_scanned'])
-plt.title('Boxplot of Total Items Scanned')
-
-plt.subplot(2, 3, 3)
-sns.boxplot(y=df_features['total_amount_spent'])
-plt.title('Boxplot of Total Amount Spent')
-
-plt.subplot(2, 3, 4)
-sns.boxplot(y=df_features['visit_count'])
-plt.title('Boxplot of Visit Count')
-
-plt.subplot(2, 3, 5)
-sns.boxplot(y=df_features['average_time_between_scans'])
-plt.title('Boxplot of Average Time Between Scans')
+# EDA: Boxplots and Histograms
+features = ['time_elapsed', 'price']
+plt.figure(figsize=(12, 6))
+for i, feature in enumerate(features, 1):
+    plt.subplot(1, 2, i)
+    sns.boxplot(y=df[feature])
+    plt.title(f'Boxplot of {feature}')
 
 plt.tight_layout()
 plt.show()
 
-# Plot histograms for each feature on a grid
-plt.figure(figsize=(16, 8))
-plt.subplot(2, 3, 1)
-sns.histplot(df_features['total_time_spent'], bins=30, kde=True)
-plt.title('Distribution of Total Time Spent')
-
-plt.subplot(2, 3, 2)
-sns.histplot(df_features['total_items_scanned'], bins=30, kde=True)
-plt.title('Distribution of Total Items Scanned')
-
-plt.subplot(2, 3, 3)
-sns.histplot(df_features['total_amount_spent'], bins=30, kde=True)
-plt.title('Distribution of Total Amount Spent')
-
-plt.subplot(2, 3, 4)
-sns.histplot(df_features['visit_count'], bins=30, kde=True)
-plt.title('Distribution of Visit Count')
-
-plt.subplot(2, 3, 5)
-sns.histplot(df_features['average_time_between_scans'], bins=30, kde=True)
-plt.title('Distribution of Average Time Between Scans')
+plt.figure(figsize=(12, 6))
+for i, feature in enumerate(features, 1):
+    plt.subplot(1, 2, i)
+    sns.histplot(df[feature], bins=30, kde=True)
+    plt.title(f'Distribution of {feature}')
 
 plt.tight_layout()
 plt.show()
 
 # Frequency plot for department visits
-department_counts = defaultdict(int)
-for customer_id, visits in department_visits.items():
-    for department, count in visits.items():
-        department_counts[department] += count
-
-departments = list(department_counts.keys())
-frequencies = list(department_counts.values())
-
-plt.figure(figsize=(10, 6))
-sns.barplot(x=departments, y=frequencies, palette='viridis')
-plt.title('Frequency of Department Visits', fontsize=14)
-plt.xlabel('Department', fontsize=12)
-plt.ylabel('Frequency', fontsize=12)
-plt.xticks(rotation=45, ha='right', fontsize=10)
-plt.yticks(fontsize=10)
+department_counts = df['department'].value_counts()
+plt.figure(figsize=(12, 6))
+sns.barplot(x=department_counts.index, y=department_counts.values, palette='viridis')
+plt.title('Frequency of Department Visits')
+plt.xlabel('Department')
+plt.ylabel('Frequency')
+plt.xticks(rotation=45)
 plt.show()
-#trial
+
+# Grouping data by customer_id
+customer_stats = df.groupby('customer_id').agg(
+    total_spent=pd.NamedAgg(column='price', aggfunc='sum'),
+    total_items=pd.NamedAgg(column='price', aggfunc='size'),
+    avg_spent_per_visit=pd.NamedAgg(column='price', aggfunc='mean'),
+    total_time=pd.NamedAgg(column='time_elapsed', aggfunc='sum')
+).reset_index()
+
+print(customer_stats.head())
+
+# Visualizing total spending per customer
+plt.figure(figsize=(12, 6))
+sns.histplot(customer_stats['total_spent'], bins=30, kde=True)
+plt.title('Distribution of Total Spending per Customer')
+plt.xlabel('Total Spent')
+plt.ylabel('Number of Customers')
+plt.show()
+
+
+# Feature engineering
+customer_totals = df.groupby('customer_id').agg(total_spent=pd.NamedAgg(column='price', aggfunc='sum'))
+# Average purchase value, maximum, minimum purchase per visit
+customer_averages = df.groupby('customer_id').agg(avg_spent=pd.NamedAgg(column='price', aggfunc='mean'),
+                                                  max_spent=pd.NamedAgg(column='price', aggfunc='max'),
+                                                  min_spent=pd.NamedAgg(column='price', aggfunc='min'))
+
+# Visit duration
+visit_duration = df.groupby('customer_id')['time_elapsed'].transform('sum')
+
+# Department visit counts
+department_counts = pd.get_dummies(df['department']).groupby(df['customer_id']).sum()
+# Avg time between scans
+avg_time_between_scans = df.groupby('customer_id')['time_elapsed'].transform(lambda x: x.mean())
+# Combine features into a single DataFrame
+features_df = pd.concat([customer_totals, customer_averages, department_counts, visit_duration, avg_time_between_scans],
+                        axis=1)
+print(features_df.head())
+
+# Assuming we have already calculated customer_stats dataframe and features_df dataframe
+
+# Frequency of Visits
+customer_stats['visit_frequency'] = pd.qcut(customer_stats['total_items'], q=4,
+                                             labels=['Low', 'Medium-Low', 'Medium-High', 'High'])
+
+# Total Spending
+customer_stats['spending_category'] = pd.qcut(customer_stats['total_spent'], q=4,
+                                               labels=['Low', 'Medium-Low', 'Medium-High', 'High'])
+
+# Average Spending per Visit
+customer_stats['avg_spending_per_visit'] = pd.qcut(customer_stats['avg_spent_per_visit'], q=4,
+                                                    labels=['Low', 'Medium-Low', 'Medium-High', 'High'])
+
+# Time Spent in Store
+customer_stats['time_spent_category'] = pd.qcut(customer_stats['total_time'], q=4,
+                                                 labels=['Low', 'Medium-Low', 'Medium-High', 'High'])
+
+
+# Now, let's combine these customer profiling features with other features in features_df
+features_df = pd.concat([features_df, customer_stats[['visit_frequency', 'spending_category',
+                                                      'avg_spending_per_visit', 'time_spent_category']]], axis=1)
+
+print(features_df.head())
+
+# Create subplots for overlaid histograms
+plt.figure(figsize=(12, 6))
+
+# Histogram for Total Spending
+plt.subplot(1, 2, 1)
+for category in customer_stats['spending_category'].unique():
+    sns.histplot(customer_stats[customer_stats['spending_category'] == category]['total_spent'], bins=30,
+                 kde=True, label=category, alpha=0.5)
+plt.title('Distribution of Total Spending by Spending Category')
+plt.xlabel('Total Spending')
+plt.ylabel('Frequency')
+plt.legend()
+
+# Histogram for Total Items
+plt.subplot(1, 2, 2)
+for category in customer_stats['visit_frequency'].unique():
+    sns.histplot(customer_stats[customer_stats['visit_frequency'] == category]['total_items'], bins=30,
+                 kde=True, label=category, alpha=0.5)
+plt.title('Distribution of Total Items by Visit Frequency')
+plt.xlabel('Total Items')
+plt.ylabel('Frequency')
+plt.legend()
+
+plt.tight_layout()
+plt.show()
+
+# Create subplots for frequency plots
+plt.figure(figsize=(18, 6))
+
+# Frequency plot for Spending Category
+plt.subplot(1, 3, 1)
+sns.countplot(x='spending_category', data=customer_stats, palette='Set1')
+plt.title('Frequency of Customers by Spending Category')
+plt.xlabel('Spending Category')
+plt.ylabel('Number of Customers')
+
+# Frequency plot for Visit Frequency
+plt.subplot(1, 3, 2)
+sns.countplot(x='visit_frequency', data=customer_stats, palette='Set2')
+plt.title('Frequency of Customers by Visit Frequency')
+plt.xlabel('Visit Frequency')
+plt.ylabel('Number of Customers')
+
+# Frequency plot for Time Spent Category
+plt.subplot(1, 3, 3)
+sns.countplot(x='time_spent_category', data=customer_stats, palette='Set3')
+plt.title('Frequency of Customers by Time Spent Category')
+plt.xlabel('Time Spent Category')
+plt.ylabel('Number of Customers')
+
+plt.tight_layout()
+plt.show()
+# Overlayed histograms for frequency plots
+plt.figure(figsize=(12, 8))
+
+# Frequency plot for Spending Category
+sns.countplot(x='spending_category', data=customer_stats, palette='Set1', hue='visit_frequency')
+plt.title('Frequency of Customers by Spending Category')
+plt.xlabel('Spending Category')
+plt.ylabel('Number of Customers')
+plt.legend(title='Visit Frequency')
+
+plt.tight_layout()
+plt.show()
+
+
+
+
+
